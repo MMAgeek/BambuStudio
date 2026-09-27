@@ -1,0 +1,39 @@
+name: Build Windows ARM64EC
+
+# Fork-only workflow: builds just the Windows ARM64EC variant (native ARM64
+# code that can load Bambu's x64-only network plugin) on GitHub's free
+# windows-11-arm runner, without running the full Linux/macOS/x64 matrix
+# in build_all.yml. Reuses the same deps-cache -> deps -> app pipeline.
+
+on:
+  push:
+    branches:
+      - win-arm64ec
+    paths:
+      - 'deps/**'
+      - 'src/**'
+      - '**/CMakeLists.txt'
+      - 'cmake/**'
+      - 'version.inc'
+      - 'resources/**'
+      - '.github/workflows/build_*.yml'
+  workflow_dispatch:
+    inputs:
+      build-deps-only:
+        description: 'Only build dependencies (bypasses caching)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm64ec:
+    name: Windows ARM64EC
+    uses: ./.github/workflows/build_check_cache.yml
+    with:
+      os: windows-11-arm
+      arch: arm64ec
+      build-deps-only: ${{ inputs.build-deps-only || false }}
+    secrets: inherit
