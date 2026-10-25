@@ -91,7 +91,14 @@ jobs:
             mkdir ${{ github.workspace }}\deps\build\BambuStudio_dep
             cd "${{ github.workspace }}\deps\build"
             $platform = "${{ inputs.arch }}" -eq "arm64ec" ? "ARM64EC" : "ARM64"
-            cmake ../ -G "Visual Studio 17 2022" -A $platform -DDESTDIR="./BambuStudio_dep" -DCMAKE_BUILD_TYPE=Release -DDEP_DEBUG=OFF
+            # The windows-11-arm image's Visual Studio version changes over time (VS 2022 was
+            # replaced by VS 2026 in 2026), so pick the CMake generator from what is installed.
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            $vsMajor = ((& $vswhere -latest -products * -property installationVersion) -split '\.')[0]
+            $generator = @{ '17' = 'Visual Studio 17 2022'; '18' = 'Visual Studio 18 2026' }[$vsMajor]
+            if (-not $generator) { throw "No supported Visual Studio found (major version '$vsMajor')." }
+            Write-Output "Using CMake generator: $generator"
+            cmake ../ -G $generator -A $platform -DDESTDIR="./BambuStudio_dep" -DCMAKE_BUILD_TYPE=Release -DDEP_DEBUG=OFF
             msbuild /m ALL_BUILD.vcxproj
         shell: pwsh
 

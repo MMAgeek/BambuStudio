@@ -10,6 +10,7 @@ Bambu merged the ARM64/ARM64EC build support (PR #11599, by Ryan Ewen) into upst
 |---|---|
 | `.github/workflows/build_win_arm64ec.yml` | Builds only the ARM64EC variant on GitHub's free `windows-11-arm` runner, on every push to `win-arm64ec` or when started by hand, instead of upstream's 9-job matrix. |
 | `deps/OpenSSL/OpenSSL.cmake` | Picks vsdevcmd's `-host_arch` from the build machine, so ARM64EC dependencies can also be cross-built on an x64 PC. Upstream hard-codes `arm64`. |
+| `.github/workflows/build_deps.yml`, `build_bambu.yml` | Pick the CMake generator from the Visual Studio installed on the runner. Between late September and late October 2026, GitHub's `windows-11-arm` image moved from VS 2022 to VS 2026, and upstream's ARM steps hard-code `Visual Studio 17 2022`, so the build failed with "could not find any instance of Visual Studio". |
 
 ## Files in this folder
 
