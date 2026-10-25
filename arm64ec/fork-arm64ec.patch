@@ -1,0 +1,87 @@
+From 58a8aeac88fd3c372fad1d39e74ee1790d28235f Mon Sep 17 00:00:00 2001
+From: Arran Martindale <arran.martindale@sysgroup.com>
+Date: Sun, 27 Sep 2026 13:23:36 +0700
+Subject: [PATCH] Add fork-only ARM64EC CI workflow; detect host arch for
+ OpenSSL ARM64EC env
+
+- .github/workflows/build_win_arm64ec.yml: builds only the windows-11-arm
+  arm64ec variant (push to win-arm64ec or manual dispatch), reusing the
+  existing cache -> deps -> app pipeline instead of the full build_all matrix.
+- deps/OpenSSL/OpenSSL.cmake: pick vsdevcmd -host_arch from
+  CMAKE_HOST_SYSTEM_PROCESSOR instead of hard-coding arm64, so ARM64EC deps
+  can also be cross-built on an x64 host.
+---
+ .github/workflows/build_win_arm64ec.yml | 39 +++++++++++++++++++++++++
+ deps/OpenSSL/OpenSSL.cmake              |  9 +++++-
+ 2 files changed, 47 insertions(+), 1 deletion(-)
+ create mode 100644 .github/workflows/build_win_arm64ec.yml
+
+diff --git a/.github/workflows/build_win_arm64ec.yml b/.github/workflows/build_win_arm64ec.yml
+new file mode 100644
+index 000000000..1c0010eb1
+--- /dev/null
++++ b/.github/workflows/build_win_arm64ec.yml
+@@ -0,0 +1,39 @@
++name: Build Windows ARM64EC
++
++# Fork-only workflow: builds just the Windows ARM64EC variant (native ARM64
++# code that can load Bambu's x64-only network plugin) on GitHub's free
++# windows-11-arm runner, without running the full Linux/macOS/x64 matrix
++# in build_all.yml. Reuses the same deps-cache -> deps -> app pipeline.
++
++on:
++  push:
++    branches:
++      - win-arm64ec
++    paths:
++      - 'deps/**'
++      - 'src/**'
++      - '**/CMakeLists.txt'
++      - 'cmake/**'
++      - 'version.inc'
++      - 'resources/**'
++      - '.github/workflows/build_*.yml'
++  workflow_dispatch:
++    inputs:
++      build-deps-only:
++        description: 'Only build dependencies (bypasses caching)'
++        type: boolean
++        default: false
++
++concurrency:
++  group: ${{ github.workflow }}-${{ github.ref }}
++  cancel-in-progress: true
++
++jobs:
++  arm64ec:
++    name: Windows ARM64EC
++    uses: ./.github/workflows/build_check_cache.yml
++    with:
++      os: windows-11-arm
++      arch: arm64ec
++      build-deps-only: ${{ inputs.build-deps-only || false }}
++    secrets: inherit
+diff --git a/deps/OpenSSL/OpenSSL.cmake b/deps/OpenSSL/OpenSSL.cmake
+index 85a5c9482..fbf3fec4c 100644
+--- a/deps/OpenSSL/OpenSSL.cmake
++++ b/deps/OpenSSL/OpenSSL.cmake
+@@ -45,8 +45,15 @@ if(WIN32)
+         if(NOT EXISTS "${_vsdevcmd}")
+             message(FATAL_ERROR "OpenSSL ARM64EC: cannot locate vsdevcmd.bat for the x64 cross environment")
+         endif()
++        # Match vsdevcmd's host_arch to the build machine so this also works when
++        # cross-building ARM64EC from an x64 host (the upstream PR assumed arm64).
++        if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
++            set(_openssl_host_arch arm64)
++        else()
++            set(_openssl_host_arch x64)
++        endif()
+         set(_x64env_bat "${CMAKE_CURRENT_BINARY_DIR}/openssl_x64env.bat")
+-        file(WRITE "${_x64env_bat}" "@echo off\r\ncall \"${_vsdevcmd}\" -arch=x64 -host_arch=arm64 -no_logo\r\n%*\r\n")
++        file(WRITE "${_x64env_bat}" "@echo off\r\ncall \"${_vsdevcmd}\" -arch=x64 -host_arch=${_openssl_host_arch} -no_logo\r\n%*\r\n")
+         set(_cross_arch "VC-WIN64A")
+         set(_conf_cmd "${_x64env_bat}" perl Configure )
+         set(_make_cmd "${_x64env_bat}" nmake)
+-- 
+2.39.1.windows.1
+
