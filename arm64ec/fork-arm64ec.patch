@@ -1,7 +1,7 @@
 From 58a8aeac88fd3c372fad1d39e74ee1790d28235f Mon Sep 17 00:00:00 2001
 From: Arran Martindale <arran.martindale@sysgroup.com>
 Date: Sun, 27 Sep 2026 13:23:36 +0700
-Subject: [PATCH] Add fork-only ARM64EC CI workflow; detect host arch for
+Subject: [PATCH 1/2] Add fork-only ARM64EC CI workflow; detect host arch for
  OpenSSL ARM64EC env
 
 - .github/workflows/build_win_arm64ec.yml: builds only the windows-11-arm
@@ -82,6 +82,60 @@ index 85a5c9482..fbf3fec4c 100644
          set(_cross_arch "VC-WIN64A")
          set(_conf_cmd "${_x64env_bat}" perl Configure )
          set(_make_cmd "${_x64env_bat}" nmake)
+-- 
+2.39.1.windows.1
+
+From 3311c87026ac96b045b6f793057e96df4a35a84a Mon Sep 17 00:00:00 2001
+From: Arran Martindale <26198491+MMAgeek@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 13:15:12 +0700
+Subject: [PATCH 2/2] CI: pick the VS generator from the runner (windows-11-arm
+ now has VS 2026)
+
+---
+ .github/workflows/build_bambu.yml | 9 ++++++++-
+ .github/workflows/build_deps.yml  | 9 ++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/build_bambu.yml b/.github/workflows/build_bambu.yml
+index ed3c5e6b6..c08a0bdc3 100644
+--- a/.github/workflows/build_bambu.yml
++++ b/.github/workflows/build_bambu.yml
+@@ -149,7 +149,14 @@ jobs:
+           $platform = "${{ inputs.arch }}" -eq "arm64ec" ? "ARM64EC" : "ARM64"
+           mkdir build
+           cd build
+-          cmake .. -G "Visual Studio 17 2022" -A $platform -DBBL_RELEASE_TO_PUBLIC=1 -DBBL_INTERNAL_TESTING=0 -DCMAKE_PREFIX_PATH="${{ github.workspace }}\deps\build\BambuStudio_dep\usr\local" -DCMAKE_INSTALL_PREFIX="../install-dir" -DCMAKE_BUILD_TYPE=Release -DWIN10SDK_PATH="$sdk"
++          # The windows-11-arm image's Visual Studio version changes over time (VS 2022 was
++          # replaced by VS 2026 in 2026), so pick the CMake generator from what is installed.
++          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
++          $vsMajor = ((& $vswhere -latest -products * -property installationVersion) -split '\.')[0]
++          $generator = @{ '17' = 'Visual Studio 17 2022'; '18' = 'Visual Studio 18 2026' }[$vsMajor]
++          if (-not $generator) { throw "No supported Visual Studio found (major version '$vsMajor')." }
++          Write-Output "Using CMake generator: $generator"
++          cmake .. -G $generator -A $platform -DBBL_RELEASE_TO_PUBLIC=1 -DBBL_INTERNAL_TESTING=0 -DCMAKE_PREFIX_PATH="${{ github.workspace }}\deps\build\BambuStudio_dep\usr\local" -DCMAKE_INSTALL_PREFIX="../install-dir" -DCMAKE_BUILD_TYPE=Release -DWIN10SDK_PATH="$sdk"
+           cmake --build . --target install --config Release -- -m
+ 
+       # - name: Create installer Win
+diff --git a/.github/workflows/build_deps.yml b/.github/workflows/build_deps.yml
+index b0f34107f..69fc6ee95 100644
+--- a/.github/workflows/build_deps.yml
++++ b/.github/workflows/build_deps.yml
+@@ -91,7 +91,14 @@ jobs:
+             mkdir ${{ github.workspace }}\deps\build\BambuStudio_dep
+             cd "${{ github.workspace }}\deps\build"
+             $platform = "${{ inputs.arch }}" -eq "arm64ec" ? "ARM64EC" : "ARM64"
+-            cmake ../ -G "Visual Studio 17 2022" -A $platform -DDESTDIR="./BambuStudio_dep" -DCMAKE_BUILD_TYPE=Release -DDEP_DEBUG=OFF
++            # The windows-11-arm image's Visual Studio version changes over time (VS 2022 was
++            # replaced by VS 2026 in 2026), so pick the CMake generator from what is installed.
++            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
++            $vsMajor = ((& $vswhere -latest -products * -property installationVersion) -split '\.')[0]
++            $generator = @{ '17' = 'Visual Studio 17 2022'; '18' = 'Visual Studio 18 2026' }[$vsMajor]
++            if (-not $generator) { throw "No supported Visual Studio found (major version '$vsMajor')." }
++            Write-Output "Using CMake generator: $generator"
++            cmake ../ -G $generator -A $platform -DDESTDIR="./BambuStudio_dep" -DCMAKE_BUILD_TYPE=Release -DDEP_DEBUG=OFF
+             msbuild /m ALL_BUILD.vcxproj
+         shell: pwsh
+ 
 -- 
 2.39.1.windows.1
 
